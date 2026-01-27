@@ -1,57 +1,94 @@
-import requests, time, threading
-from flask import Flask, request
-from telegram import Bot
+import requests
+import asyncio
+from flask import Flask
+from threading import Thread
 
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+# ========== CONFIG ==========
 BOT_TOKEN = "8460162101:AAEyHziGS-IN7rEidek8_Xl_SCY6RVuk21o"
-USGS_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-MIN_MAG = 0.5
+MIN_MAGNITUDE = 0.5  # Change if you want
+CHECK_INTERVAL = 300  # seconds (5 minutes)
 
-users = set()
-last_id = None
-bot = Bot(token=BOT_TOKEN)
+subscribers = set()
+last_event_id = None
 
-def check_quakes():
-    global last_id
-    while True:
-        try:
-            data = requests.get(USGS_URL).json()
-            quake = data["features"][0]
-            qid = quake["id"]
-            mag = quake["properties"]["mag"]
-            place = quake["properties"]["place"]
-            lon, lat, _ = quake["geometry"]["coordinates"]
-
-            if qid != last_id and mag >= MIN_MAG:
-                last_id = qid
-                msg = f"🚨 Earthquake Alert\n🌍 {place}\n📏 Mag: {mag}\n🗺 https://maps.google.com/?q={lat},{lon}"
-                for u in users:
-                    bot.send_message(u, msg)
-                    time.sleep(1)
-
-        except Exception as e:
-            print(e)
-
-        time.sleep(60)
-
-threading.Thread(target=check_quakes).start()
-
+# ========== FLASK SERVER (needed for Render) ==========
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot Running"
+    return "Earthquake Bot Running!"
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json()
-    chat_id = data["message"]["chat"]["id"]
-    text = data["message"].get("text")
-
-    if text == "/start":
-        users.add(chat_id)
-        bot.send_message(chat_id, "✅ Subscribed to Earthquake Alerts")
-
-    return "ok"
-
-if __name__ == "__main__":
+def run_flask():
     app.run(host="0.0.0.0", port=10000)
+
+# ========== TELEGRAM COMMANDS ==========
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    subscribers.add(chat_id)
+    await update.message.reply_text("✅ You are subscribed to GLOBAL earthquake alerts 🌍")
+
+async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    subscribers.discard(chat_id)
+    await update.message.reply_text("❌ You unsubscribed from alerts.")
+
+# ========== EARTHQUAKE CHECKER ==========
+async def check_earthquakes(bot_app):
+    global last_event_id
+
+    while True:
+        try:
+            url = f"https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/{MIN_MAGNITUDE}_hour.geojson"
+            data = requests.get(url).json()
+
+            if data["features"]:
+                event = data["features"][0]
+                event_id = event["id"]
+
+                if event_id != last_event_id:
+                    last_event_id = event_id
+
+                    magnitude = event["properties"]["mag"]
+                    place = event["properties"]["place"]
+                    time = event["properties"]["time"]
+                    lat, lon, _ = event["geometry"]["coordinates"]
+
+                    message = (
+                        f"🚨 *Earthquake Alert!*\n\n"
+                        f"🌍 Location: {place}\n"
+                        f"📏 Magnitude: {magnitude}\n"
+                        f"📍 Coordinates: {lon}, {lat}"
+                    )
+
+                    for user in subscribers:
+                        await bot_app.bot.send_message(
+                            chat_id=user,
+                            text=message,
+                            parse_mode="Markdown"
+                        )
+
+        except Exception as e:
+            print("Error:", e)
+
+        await asyncio.sleep(CHECK_INTERVAL)
+
+# ========== MAIN ==========
+async def main():
+    telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("stop", stop))
+
+    # Start earthquake monitoring task
+    telegram_app.create_task(check_earthquakes(telegram_app))
+
+    await telegram_app.run_polling()
+
+# Run Flask in separate thread
+Thread(target=run_flask).start()
+
+# Start bot
+asyncio.run(main())
