@@ -6,15 +6,15 @@ from threading import Thread
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# ========== CONFIG ==========
-BOT_TOKEN = "8460162101:AAEyHziGS-IN7rEidek8_Xl_SCY6RVuk21o"
-MIN_MAGNITUDE = 0.5  # Change if you want
-CHECK_INTERVAL = 300  # seconds (5 minutes)
+# ================= CONFIG =================
+BOT_TOKEN = ""
+MIN_MAGNITUDE = 0.5
+CHECK_INTERVAL = 300  # seconds
 
 subscribers = set()
 last_event_id = None
 
-# ========== FLASK SERVER (needed for Render) ==========
+# ================= FLASK SERVER =================
 app = Flask(__name__)
 
 @app.route("/")
@@ -24,7 +24,7 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
-# ========== TELEGRAM COMMANDS ==========
+# ================= TELEGRAM COMMANDS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     subscribers.add(chat_id)
@@ -35,8 +35,8 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subscribers.discard(chat_id)
     await update.message.reply_text("❌ You unsubscribed from alerts.")
 
-# ========== EARTHQUAKE CHECKER ==========
-async def check_earthquakes(bot_app):
+# ================= EARTHQUAKE CHECKER =================
+async def check_earthquakes(app_bot):
     global last_event_id
 
     while True:
@@ -53,42 +53,33 @@ async def check_earthquakes(bot_app):
 
                     magnitude = event["properties"]["mag"]
                     place = event["properties"]["place"]
-                    time = event["properties"]["time"]
-                    lat, lon, _ = event["geometry"]["coordinates"]
+                    lon, lat, _ = event["geometry"]["coordinates"]
 
                     message = (
                         f"🚨 *Earthquake Alert!*\n\n"
                         f"🌍 Location: {place}\n"
                         f"📏 Magnitude: {magnitude}\n"
-                        f"📍 Coordinates: {lon}, {lat}"
+                        f"📍 Coordinates: {lat}, {lon}"
                     )
 
                     for user in subscribers:
-                        await bot_app.bot.send_message(
-                            chat_id=user,
-                            text=message,
-                            parse_mode="Markdown"
-                        )
+                        await app_bot.bot.send_message(chat_id=user, text=message, parse_mode="Markdown")
 
         except Exception as e:
             print("Error:", e)
 
         await asyncio.sleep(CHECK_INTERVAL)
 
-# ========== MAIN ==========
-async def main():
+# ================= BOT START FUNCTION =================
+def start_bot():
     telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("stop", stop))
 
-    # Start earthquake monitoring task
     telegram_app.create_task(check_earthquakes(telegram_app))
+    telegram_app.run_polling()
 
-    await telegram_app.run_polling()
-
-# Run Flask in separate thread
+# ================= RUN BOTH =================
 Thread(target=run_flask).start()
-
-# Start bot
-asyncio.run(main())
+Thread(target=start_bot).start()
