@@ -1,43 +1,45 @@
+import logging
 import requests
-from flask import Flask, request
-from telegram import Update, Bot
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = "8242017172:AAHyFWsoHrKCpeAiGQIIBb6AxpROjGFyfTg"
-RENDER_URL = "https://example.onrender.com"
-MIN_MAGNITUDE = 0.5
 
-app = Flask(__name__)
-bot = Bot(BOT_TOKEN)
-telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
+logging.basicConfig(level=logging.INFO)
 
 subscribers = set()
-last_event_id = None
 
-# ---------- TELEGRAM COMMANDS ----------
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    subscribers.add(update.effective_chat.id)
-    await update.message.reply_text("✅ Subscribed to earthquake alerts 🌍")
+    chat_id = update.effective_chat.id
+    subscribers.add(chat_id)
+    await update.message.reply_text("✅ You are subscribed to GLOBAL earthquake alerts 🌍")
 
-async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    subscribers.discard(update.effective_chat.id)
-    await update.message.reply_text("❌ Unsubscribed")
+# Earthquake checker
+async def check_earthquakes(context: ContextTypes.DEFAULT_TYPE):
+    url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_hour.geojson"
+    data = requests.get(url).json()
 
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CommandHandler("stop", stop))
+    for quake in data["features"][:1]:
+        mag = quake["properties"]["mag"]
+        place = quake["properties"]["place"]
+        link = quake["properties"]["url"]
 
-# ---------- WEBHOOK ROUTE ----------
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    telegram_app.update_queue.put_nowait(update)
-    return "ok"
+        message = f"🚨 Earthquake Alert!\nMagnitude: {mag}\nLocation: {place}\nMore info: {link}"
 
-@app.route("/")
-def home():
-    return "Bot is live"
+        for chat_id in subscribers:
+            await context.bot.send_message(chat_id, message)
 
-# ---------- START ----------
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+
+    # Run earthquake check every 5 min
+    app.job_queue.run_repeating(check_earthquakes, interval=300, first=10)
+
+    print("Bot is running...")
+    app.run_polling()
+
 if __name__ == "__main__":
-    bot.set_webhook(url=f"{RENDER_URL}/{BOT_TOKEN}")
-    app.run(host="0.0.0.0", port=10000)
+    main()
