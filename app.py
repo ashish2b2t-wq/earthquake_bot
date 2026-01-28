@@ -5,7 +5,6 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = "8242017172:AAHyFWsoHrKCpeAiGQIIBb6AxpROjGFyfTg"
 RENDER_URL = "RENDER_URL = "https://example.onrender.com"
-"  # like https://earthquake-bot.onrender.com
 MIN_MAGNITUDE = 0.5
 
 app = Flask(__name__)
