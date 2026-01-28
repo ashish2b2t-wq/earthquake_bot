@@ -4,7 +4,7 @@ from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = "8242017172:AAHyFWsoHrKCpeAiGQIIBb6AxpROjGFyfTg"
-RENDER_URL = "RENDER_URL = "https://example.onrender.com"
+RENDER_URL = "https://example.onrender.com"
 MIN_MAGNITUDE = 0.5
 
 app = Flask(__name__)
