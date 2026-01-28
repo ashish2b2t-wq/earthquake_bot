@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # ================= CONFIG =================
-BOT_TOKEN = "8460162101:AAEyHziGS-IN7rEidek8_Xl_SCY6RVuk21o"
+BOT_TOKEN = "8242017172:AAHyFWsoHrKCpeAiGQIIBb6AxpROjGFyfTg"
 MIN_MAGNITUDE = 0.5
 CHECK_INTERVAL = 300  # seconds
 
