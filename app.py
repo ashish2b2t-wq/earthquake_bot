@@ -3,8 +3,8 @@ from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = "PASTE_YOUR_TOKEN"
-MIN_MAGNITUDE = 4.5
+BOT_TOKEN = "8242017172:AAHyFWsoHrKCpeAiGQIIBb6AxpROjGFyfTg"
+MIN_MAGNITUDE = 0.5
 
 app = Flask(__name__)
 bot = Bot(BOT_TOKEN)
